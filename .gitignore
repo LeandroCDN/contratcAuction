@@ -1,0 +1,8 @@
+node_modules
+yarn.lock
+.secret
+.secret2
+.env
+contracts/interfaces
+contracts/libraries
+contracts/feeBeneficiary.sol
