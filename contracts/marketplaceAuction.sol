@@ -4,6 +4,48 @@ pragma solidity ^0.8.0;
 import "./Marketplace.sol";
 
 contract MarketplaceAuction is Marketplace {
+    /***************
+    * New Features *
+    ****************/
+    //Puja minima con %
+    uint bidFee = 1;
+
+
+    modifier bidAmountMeetsBidRequirements(
+        address _nftContractAddress,
+        uint256 _tokenId,
+        uint256 _tokenAmount
+    ) {
+        require(
+            _doesBidMeetBidRequirements(
+                _nftContractAddress,
+                _tokenId,
+                _tokenAmount
+            ),
+            "Not enough funds to bid on NFT"
+        );
+        _;
+    }
+    /*
+     * An auction: the bid needs to be a bidFee% higher than the previous bid.
+     */
+    function _doesBidMeetBidRequirements(
+        address _nftContractAddress,
+        uint256 _tokenId,
+        uint256 _tokenAmount
+    ) internal view returns (bool) {        
+        //if the NFT is up for auction, the bid needs to be a % higher than the previous bid
+        uint256 bidIncreaseAmount = (listings[_token][_tokenId].highestBid * bidFee) / 100
+            + listings[_token][_tokenId].highestBid;
+        return   (_tokenAmount >= bidIncreaseAmount);
+    }
+
+    function setBidFee(uint _bidFee) external onlyOwner{
+        bidFee = _bidFee;
+    }
+
+
+
     //currency medamon
     struct Listing {
         address lister;
@@ -62,7 +104,14 @@ contract MarketplaceAuction is Marketplace {
         IERC721 _token,
         uint256 _tokenId,
         uint256 _amount
-    ) public whenNotPaused onlyWhitelistedTokens(_token) {
+    )   public
+        whenNotPaused onlyWhitelistedTokens(_token)
+        bidAmountMeetsBidRequirements(
+            _token,
+            _tokenId,
+            _tokenAmount
+        )
+    {
 
         //cambiar a memory
         Listing storage listing = listings[_token][_tokenId];
