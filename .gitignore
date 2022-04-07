@@ -5,4 +5,3 @@ yarn.lock
 .env
 contracts/interfaces
 contracts/libraries
-contracts/feeBeneficiary.sol
