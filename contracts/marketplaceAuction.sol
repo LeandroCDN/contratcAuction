@@ -35,7 +35,7 @@ contract MarketplaceAuction is Marketplace {
         uint256 _tokenAmount
     ) internal view returns (bool) {        
         //if the NFT is up for auction, the bid needs to be a % higher than the previous bid
-        uint256 bidIncreaseAmount = (listings[_token][_tokenId].highestBid * bidFee) / 100
+        uint256 bidIncreaseAmount = (listings[_nftContractAddress][_tokenId].highestBid * bidFee) / 100
             + listings[_token][_tokenId].highestBid;
         return   (_tokenAmount >= bidIncreaseAmount);
     }
@@ -105,14 +105,14 @@ contract MarketplaceAuction is Marketplace {
         uint256 _tokenId,
         uint256 _amount
     )   public
-        whenNotPaused onlyWhitelistedTokens(_token)
+        whenNotPaused 
+        onlyWhitelistedTokens(_token)
         bidAmountMeetsBidRequirements(
             _token,
             _tokenId,
             _tokenAmount
         )
     {
-
         //cambiar a memory
         Listing storage listing = listings[_token][_tokenId];
         require(listing.lister != address(0), "MARKETPLACE: Token not listed");
