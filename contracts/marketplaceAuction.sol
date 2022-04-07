@@ -7,7 +7,35 @@ contract MarketplaceAuction is Marketplace {
     /***************
     * New Features *
     ****************/
-    //Puja minima con %
+    
+    /*sumar tiempo al pujar
+    * Si queda poco tiempo, y se puja
+    * el tiempo regreara a un minimo pre estimado
+    * Ejemplo: tiempo minimi 60 minutos.
+        alguien puja cuando faltan 20 minutos, el tiempo regresa a 60minutos, sin sobrepasarlos.
+    */
+
+    uint minEndTime; //tiempo que debe manterse como minimo, en segundos.
+
+    /* Regresa la diferencia entre el tiempo que le queda a la subasta, con el minEndTime
+    *  usar en la funcion de puja, para sumar al endTime, el tiempo retornado por esta funcion.
+    */
+    function difTimeToend(uint _endTime) public view returns(uint){
+        uint timeLeft = _getTimeLeft(_endTime);
+        if(minEndTime > timeLeft) {
+            // si el tiempo restante es menor, regresa la difrencia que se le debe sumar a endTime;
+            return minEndTime - timeLeft;
+        }
+        return 0; //Si el tiempo es mayor, retorna 0, porque no se debe sumar ningun segundo.
+
+    }
+
+    function setMinEndTime(uint _timeInSegs) public onlyOwner{
+        minEndTime = _timeInSegs;
+    }
+
+    //*Puja minima con %
+    //**************** //
     uint bidFee = 1;
 
 
@@ -132,7 +160,11 @@ contract MarketplaceAuction is Marketplace {
 
         if(_getTimeLeft(listing.endTime) < minTimeToAddPlus){
             listing.endTime += timePlus;
+            //agrega tiempo fijo tras una puja, por debajo de minTimeToAddPlus
         }
+
+        listing.endTime +=difTimeToend(listing.endTime);
+        //Mantiene un tiempo minimo tras una puja.
 
         emit Bid(msg.sender, _token, _tokenId, _amount);
     }
