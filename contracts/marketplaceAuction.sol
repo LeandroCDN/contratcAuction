@@ -32,11 +32,13 @@ contract MarketplaceAuction is Marketplace {
         IERC721[] memory _whitelistedTokens,
         IERC20 _currency,
         address _feeTo,
-        uint256 _feePercentage
-    ) Marketplace(_whitelistedTokens, _currency) FeeBeneficiary(_feeTo, _feePercentage) {}
+        address _liquidity,
+        uint256 _feePercentage,
+         uint256 _feeLiquidity
+    ) Marketplace(_whitelistedTokens, _currency) FeeBeneficiary(_feeTo, _liquidity, _feePercentage, _feeLiquidity) {}
 
     modifier bidAmountMeetsBidRequirements(
-        address _nftContractAddress,
+        IERC721 _nftContractAddress,
         uint256 _tokenId,
         uint256 _tokenAmount
     ) {
@@ -87,7 +89,7 @@ contract MarketplaceAuction is Marketplace {
         bidAmountMeetsBidRequirements(
             _token,
             _tokenId,
-            _tokenAmount
+            _amount
         )
     {
         //cambiar a memory
@@ -224,12 +226,12 @@ contract MarketplaceAuction is Marketplace {
      * An auction: the bid needs to be a bidFee% higher than the previous bid.
      */
     function _doesBidMeetBidRequirements(
-        address _nftContractAddress,
+        IERC721 _token,
         uint256 _tokenId,
         uint256 _tokenAmount
     ) internal view returns (bool) {        
         //if the NFT is up for auction, the bid needs to be a % higher than the previous bid
-        uint256 bidIncreaseAmount = (listings[_nftContractAddress][_tokenId].highestBid * bidFee) / 100
+        uint256 bidIncreaseAmount = (listings[_token][_tokenId].highestBid * bidFee) / 100
             + listings[_token][_tokenId].highestBid;
         return   (_tokenAmount >= bidIncreaseAmount);
     }
