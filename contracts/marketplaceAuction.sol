@@ -4,40 +4,36 @@ pragma solidity ^0.8.0;
 import "./Marketplace.sol";
 
 contract MarketplaceAuction is Marketplace {
-    /***************
-    * New Features *
-    ****************/
-    
-    /*sumar tiempo al pujar
-    * Si queda poco tiempo, y se puja
-    * el tiempo regreara a un minimo pre estimado
-    * Ejemplo: tiempo minimi 60 minutos.
-        alguien puja cuando faltan 20 minutos, el tiempo regresa a 60minutos, sin sobrepasarlos.
-    */
-
-    uint minEndTime; //tiempo que debe manterse como minimo, en segundos.
-
-    /* Regresa la diferencia entre el tiempo que le queda a la subasta, con el minEndTime
-    *  usar en la funcion de puja, para sumar al endTime, el tiempo retornado por esta funcion.
-    */
-    function difTimeToend(uint _endTime) public view returns(uint){
-        uint timeLeft = _getTimeLeft(_endTime);
-        if(minEndTime > timeLeft) {
-            // si el tiempo restante es menor, regresa la difrencia que se le debe sumar a endTime;
-            return minEndTime - timeLeft;
-        }
-        return 0; //Si el tiempo es mayor, retorna 0, porque no se debe sumar ningun segundo.
-
+    //currency medamon
+    struct Listing {
+        address lister;
+        uint256 initialPrice;
+        uint256 endTime;
+        address highestBidder;
+        uint256 highestBid;
     }
 
-    function setMinEndTime(uint _timeInSegs) public onlyOwner{
-        minEndTime = _timeInSegs;
-    }
+    mapping(IERC721 => mapping(uint256 => Listing)) public listings;
+    mapping(IERC721 => mapping(uint256 => Listing)) public especialListings;
 
-    //*Puja minima con %
-    //**************** //
-    uint bidFee = 1;
+    uint public minTimeToAddPlus; //Tiempo minimo para a contemplar para agregar mas tiempo a la subasta
+    uint public timePlus;//Tiempo que se agrega tras una puja
+    uint public minEndTime; //tiempo que debe Manterse como minimo, en segundos.
 
+    uint public bidFee = 1; //Minimo que debe superar la puja entrante, respecto de la puja actual.
+
+    event Listed(address lister, IERC721 token, uint256 tokenId, uint256 initialPrice, uint256 endTime);
+    event Bid(address bidder, IERC721 token, uint256 tokenId, uint256 amount);
+    event Unlisted(address lister, IERC721 token, uint256 tokenId);    
+    event Claim(address purchaser, address lister, IERC721 token, uint256 tokenId, uint256 endPrice);
+
+
+    constructor(
+        IERC721[] memory _whitelistedTokens,
+        IERC20 _currency,
+        address _feeTo,
+        uint256 _feePercentage
+    ) Marketplace(_whitelistedTokens, _currency) FeeBeneficiary(_feeTo, _feePercentage) {}
 
     modifier bidAmountMeetsBidRequirements(
         address _nftContractAddress,
@@ -54,52 +50,6 @@ contract MarketplaceAuction is Marketplace {
         );
         _;
     }
-    /*
-     * An auction: the bid needs to be a bidFee% higher than the previous bid.
-     */
-    function _doesBidMeetBidRequirements(
-        address _nftContractAddress,
-        uint256 _tokenId,
-        uint256 _tokenAmount
-    ) internal view returns (bool) {        
-        //if the NFT is up for auction, the bid needs to be a % higher than the previous bid
-        uint256 bidIncreaseAmount = (listings[_nftContractAddress][_tokenId].highestBid * bidFee) / 100
-            + listings[_token][_tokenId].highestBid;
-        return   (_tokenAmount >= bidIncreaseAmount);
-    }
-
-    function setBidFee(uint _bidFee) external onlyOwner{
-        bidFee = _bidFee;
-    }
-
-
-
-    //currency medamon
-    struct Listing {
-        address lister;
-        uint256 initialPrice;
-        uint256 endTime;
-        address highestBidder;
-        uint256 highestBid;
-    }
-    mapping(IERC721 => mapping(uint256 => Listing)) public listings;
-    uint public minTimeToAddPlus; //Tiempo minimo para a contemplar para agregar mas tiempo a la subasta
-    uint timePlus;//Tiempo que se agrega tras una puja
-
-    event Listed(address lister, IERC721 token, uint256 tokenId, uint256 initialPrice, uint256 endTime);
-    event Bid(address bidder, IERC721 token, uint256 tokenId, uint256 amount);
-    event Unlisted(address lister, IERC721 token, uint256 tokenId);    
-    event Claim(address purchaser, address lister, IERC721 token, uint256 tokenId, uint256 endPrice);
-
-
-    constructor(
-        IERC721[] memory _whitelistedTokens,
-        IERC20 _currency,
-        address _feeTo,
-        uint256 _feePercentage
-    ) Marketplace(_whitelistedTokens, _currency) FeeBeneficiary(_feeTo, _feePercentage) {}
-
-
 
     /********************
     *  PUBLIC FUNCTIONS *
@@ -125,7 +75,6 @@ contract MarketplaceAuction is Marketplace {
         listings[_token][_tokenId] = newListing;
         emit Listed(msg.sender, _token, _tokenId, _initialPrice, listing.endTime);
     }
-
 
     //modificado en linea 75. Agrega suma de tiempo si la subasta esta por terminar
     function bid(
@@ -203,6 +152,49 @@ contract MarketplaceAuction is Marketplace {
         //emit changePrice
     }
 
+    /* Regresa la diferencia entre el tiempo que le queda a la subasta, con el minEndTime
+    *  usar en la funcion de puja, para sumar al endTime, el tiempo retornado por esta funcion.
+    */
+    function difTimeToend(uint _endTime) public view returns(uint){
+        uint timeLeft = _getTimeLeft(_endTime);
+        if(minEndTime > timeLeft) {
+            // si el tiempo restante es menor, regresa la difrencia que se le debe sumar a endTime;
+            return minEndTime - timeLeft;
+        }
+        return 0; //Si el tiempo es mayor, retorna 0, porque no se debe sumar ningun segundo.
+    }
+
+    function setBidFee(uint _bidFee) external onlyOwner{
+        bidFee = _bidFee;
+    }
+
+    function setMinEndTime(uint _timeInSegs) public onlyOwner{
+        minEndTime = _timeInSegs;
+    }
+
+
+    /**flashImplement: editado del normal list */
+    function especialList(
+        IERC721 _token,
+        uint256 _tokenId,
+        uint256 _initialPrice,
+        uint256 _biddingTime
+    ) public whenNotPaused  {
+        Listing storage listing = especialListings[_token][_tokenId];
+        require(_token.ownerOf(_tokenId) == msg.sender, "MARKETPLACE: Caller is not token owner");
+        _token.transferFrom(msg.sender, address(this), _tokenId);
+
+        Listing memory newListing = Listing({
+            lister: msg.sender,
+            initialPrice: _initialPrice,
+            endTime: block.timestamp + _biddingTime,
+            highestBidder: msg.sender,
+            highestBid: 0
+        });
+        especialListings[_token][_tokenId] = newListing;
+        emit Listed(msg.sender, _token, _tokenId, _initialPrice, listing.endTime);
+    }
+
 
 
     /********************
@@ -227,6 +219,20 @@ contract MarketplaceAuction is Marketplace {
         delete listings[_token][_tokenId];
         emit Unlisted(msg.sender, _token, _tokenId);
     }  
+
+    /*
+     * An auction: the bid needs to be a bidFee% higher than the previous bid.
+     */
+    function _doesBidMeetBidRequirements(
+        address _nftContractAddress,
+        uint256 _tokenId,
+        uint256 _tokenAmount
+    ) internal view returns (bool) {        
+        //if the NFT is up for auction, the bid needs to be a % higher than the previous bid
+        uint256 bidIncreaseAmount = (listings[_nftContractAddress][_tokenId].highestBid * bidFee) / 100
+            + listings[_token][_tokenId].highestBid;
+        return   (_tokenAmount >= bidIncreaseAmount);
+    }
 
 
     /*TODO:
